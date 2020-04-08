@@ -1,0 +1,1479 @@
+//P200ms_p10______________________________________________
+//Name: GUI - Handle_GUI
+// Start and stop of ventilator
+
+HMI_ScreenNo :=0;
+
+If HMIStart then
+	Start_Stop :=1;
+	HMI_ScreenNo :=2;
+end_if;
+
+If HMIStop then 
+   Start_Stop :=0;
+   HMI_ScreenNo :=1;
+End_if;
+
+   
+if Start_Stop then									// If momantary push botton from GUI is on
+	
+	if not VentOn then;								// If VentOn from ISR_ValveCtrl is NOT on
+		StartVent := 1;								// Set start signal to MainFlow sequence
+	end_if;
+	
+else												// If stop from GUI
+		
+	if VentOn then;									// If Ventilator is running in ISR_ValveCtrl
+		StopVent :=1;								// Set stop signal to MainFlow sequence
+	end_if;
+end_if;	
+
+
+// Control of the F1 puch botton - Shifts between the 4 input just above the Fx bottons
+if data_changed then;								// start timer if data is changed
+	Timer := Timer+1;	
+	if Timer >= 25 then;
+	
+		TimerDone := 1;								// Set timer done
+		Timer := 0;
+	end_if;
+end_if;
+
+IF F1_pushed_new AND NOT F1_pushed_old Then
+	F1_pushed_old := 1;
+	IF F1_pushed_new THEN
+		IF data_changed THEN						// reset timer if data if changed repeatedly 
+			data_changed := 0;					
+			Timer := 0;								// reset timer
+			
+		END_IF;	
+		data_changed :=1;							// signal the timer to start
+		IF NOT(state_selected) THEN
+			state := last_state;
+			state_selected := 1;
+		ELSE
+			IF state <3 THEN  
+			state := (state+1);
+			ELSE state := 0; 
+		end_if;				
+						
+		END_IF;
+		CASE state OF
+			0: 	state0 := 1;
+				state1 := 0;
+				state2 := 0;
+				state3 := 0;
+			1: 	state0 := 0;
+				state1 := 1;
+				state2 := 0;
+				state3 := 0;
+			2: 	state0 := 0;
+				state1 := 0;
+				state2 := 1;
+				state3 := 0;
+			3: 	state0 := 0;
+				state1 := 0;
+				state2 := 0;
+				state3 := 1; 
+		ELSE;
+		END_CASE;
+	END_If;
+END_IF;
+
+
+if not F1_pushed_new AND F1_pushed_old then;
+	F1_pushed_old :=0;
+end_if;	
+
+
+// Control of the F2 botton - Add value to selected variable
+
+IF F2_pushed_new  AND NOT F2_pushed_old Then
+	F2_pushed_old := 1;
+	IF (F2_pushed_new AND state_selected) THEN			// increment value if state is selected
+		IF data_changed THEN							// reset timer if data if changed repeatedly 
+			data_changed :=0;					
+			Timer := 0;									// reset timer
+		END_IF;	
+		data_changed := 1;								// signal the timer to start
+		CASE state OF
+			0:	FiO2	:= FiO2 + 5;				// increment value in case the O2 is selected
+				if FiO2 >= 100 then;
+					FiO2 := 100;
+				else;
+					
+				end_if;	
+			1:	Vt	:= Vt + 50;					// increment value in case the Vt is selected
+				if Vt >= 600 then;
+					Vt := 600;
+				else;
+					
+				end_if;				
+			2:	RRate 	:= RRate + 1;				// increment value in case the RRin is selected
+				if RRate >= 35 then;
+					RRate := 35;
+				else;
+					
+				end_if;				
+			3:	IE_counter := IE_counter + 1;		// increment value in case the I:E is selected
+				if IE_counter >= 2  then;
+					IE_counter := 2;
+					
+				else;
+					
+				end_if;	
+				COP(IE[IE_counter], I_E, 82); 
+		ELSE;
+		END_CASE;
+	END_IF;
+END_IF;
+
+if not F2_pushed_new AND F2_pushed_old then;
+	F2_pushed_old :=0;
+end_if;
+
+
+// Control of the F3 botton - Sub value to selected variable
+
+IF F3_pushed_new AND NOT F3_pushed_old Then
+	F3_pushed_old := 1;
+	IF (F3_pushed_new AND state_selected) THEN		// decrement value if state is selected
+		IF data_changed THEN						// reset timer if data if changed repeatedly 
+			data_changed := 0;
+			Timer := 0;								// reset timer
+		END_IF;
+		data_changed := 1;							// signal the timer to start
+		CASE state OF
+			0:	FiO2 	:= FiO2 - 5;			// decrement value in case the O2 is selected
+				if FiO2 <= 0 then;
+					FiO2 := 0;
+				else;
+					//FiO2 := 0;
+				end_if;	
+			1:	Vt	:= Vt - 50;				// decrement value in case the Vt is selected
+				if Vt <= 200 then;
+					Vt := 200;
+				else;
+					
+				end_if;				
+			2:	RRate 	:= RRate - 1;				// decrement value in case the RRin is selected
+				if RRate <= 6 then;
+					RRate := 6;
+				else;
+					
+				end_if;				
+			3:	IE_counter := IE_counter - 1;			// increment value in case the I:E is selected
+				if IE_counter <= 0  then;
+					IE_counter := 0;
+				//COP(IE[IE_counter], I_E, 82); 		    
+				else;
+					
+				end_if;	
+				COP(IE[IE_counter], I_E, 82);
+		ELSE;
+		END_CASE;
+	END_IF;
+END_IF;
+
+if not F3_pushed_new AND F3_pushed_old then;
+	F3_pushed_old :=0;
+end_if;
+
+
+// If timer is done then deselect all states for new start
+
+IF TimerDone THEN
+	COP(Messages_to_user[0], message, 82);
+	data_changed := 0;
+	last_state := state;
+	state_selected := 0;
+	state0 := 0;
+	state1 := 0;
+	state2 := 0;
+	state3 := 0;
+	TimerDone := 0; 
+ELSE
+	IF data_changed THEN
+		Time := Timer*200;
+		COP(Time, message, 82);
+		TimerDone :=0;
+	END_IF;
+END_IF;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p5____________________________________________________________________________________________
+//Name:  measArray - Main
+
+// If 1. scan in PLC
+if s:fs then;
+	jsr(FirstScan,0);
+end_if;
+
+// Jump to subroutine
+jsr(measArrays,0);
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p5____________________________________________________________________________________________
+//Name: measArray - FirstScan
+// From Analog_values
+
+counter :=0; 
+SampelRateChangeAllowed := 0;
+Samplerate := 100 ;
+Samplerate_Old := 0;
+
+AOI_FillArray_Real2D(FillLoop,FlowAir,0,2000);
+AOI_FillArray_Real2D(FillLoop,PressArr,0,2000);
+//ClearArray_2D(FillLoop,FlowO2);		// Clear all raw data
+
+// Main flow
+
+StateMain := 10;
+SetupDone := 0;
+NewSettings := 1;
+StartVent := 0;
+StopVent := 0;
+VentOn := 0;
+
+// Setup
+
+SetupState := 0;
+
+
+// GUI
+
+data_changed :=0;
+
+
+// measCalc
+
+COP(RunModes[0], Mode, 82);	// Set Mode to 'VC'
+inspStartI := 0;
+inspPauseStartI := 0;
+expStartI := 0;
+expEndI := 0;
+totTime := 0;  //in s
+endI := 0;
+PplatBreathFrac := 0.2;
+
+AOI_FillArrayReal50(Fill50, PpeakArr, 0, 50);			//Float, 50 length array with Ppeak from measCalc(), used for minAvg
+AOI_FillArrayReal50(Fill50, PEEPArr, 0, 50);			//Float, 50 length array with positive end expiratory pressure in cmH2O, from measCalc()
+AOI_FillArrayReal50(Fill50, FlowImaxArr, 0, 50); 		//Float, 50 length array with max insp flow in l/min, from measCalc()
+AOI_FillArrayReal50(Fill50, PplatArr, 0, 50);			//Float, 50 length array with plateau insp pressure in cmH2O, from measCalc()
+AOI_FillArrayReal50(Fill50, RRArr, 0, 50);				//Float, 50 length array with respiratory rate in 1/min, from measCalc()
+AOI_FillArrayReal50(Fill50, VtiArr, 0, 50);				//Float, 50 length array with insp tidal volume in ml, from measCalc()
+AOI_FillArrayReal50(Fill50, MVArr, 0, 50);				//Float, 50 length array with minute ventilation in l/min, from measCalc()
+AOI_FillArrayReal50(Fill50, CrsDynArr, 0, 50);			//Float, 50 length array with dynamic respiraotry system compliance in ml/cmH2O, from measCalc()
+AOI_FillArrayReal50(Fill50, CrsQStatArr, 0, 50);		//Float, 50 length array with quasistatic respiratory system compliance in ml/cmH2O, from measCalc()
+AOI_FillArrayReal50(Fill50, RawArr, 0, 50); 			//Float, 50 length array with airway resistance in cmH2O/l/s, from measCalc()
+AOI_FillArrayReal50(Fill50, BreathDurationArr, 0, 50); 	//FLOAT, 50 length array with seconds for each breath for calculation of minute avgVentStateArr. Calculated from knowing meas at 100Hz for all breath data
+
+// CalcBreath
+
+StateCalcBreath := 0;		// Reset sequence
+valveUpdInterval := 10; 	//in ms Frequency 1000/10 = 100Hz
+maxFlowAllowed := 100; 		//In L/min. Sensor works until 830 ml/s (=49.8 l/min) Note: I will see if we have options to work around this as it will severely limit our options for settings
+
+// See if first time setup is done, the default values else presistent values from controller
+if FiO2 = 0 then;
+	FiO2 := 4;
+else
+	FiO2 := FiO2Running;
+end_if;
+
+if Vt = 0 then;
+	Vt := 350;
+else
+	Vt := VtRunning;
+end_if;
+
+if RRate = 0 then;
+	RRate := 15;
+else
+	RRate := RRateRunning;
+end_if;
+
+if IE_I = 0 then;
+	IE_I := 1;
+else
+	IE_I := IE_IRunning;
+end_if;
+
+if IE_E = 0 then;
+	IE_E := 2;
+else
+	IE_E := IE_ERunning;
+end_if;
+
+if inspPauseTime = 0 then;
+	inspPauseTime := 10;
+else
+	inspPauseTime := inspPauseTimeRunning;
+end_if;
+
+if inspRampTime = 0 then;
+	inspRampTime := 5;
+else
+	inspRampTime := inspRampTimeRunning;
+end_if;
+
+
+// Breath detect
+_StartPointBerfore := 30;
+_StartPosition:= 0;
+_endPosition := 0;
+_PointAfterEnd := 30; 
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p5____________________________________________________________________________________________
+//Name: measArray - measArrays
+// Enables to change scanrate 
+// Special on a Rockwell PLC were you can change scan rates on the fly
+// Settings can be between 50hz or 100hz - alternativ it can be a fixed setting
+
+if Samplerate <> Samplerate_Old then;
+	
+	if Samplerate <= 50 then;
+		Samplerate :=50;							// Set samplerate to 50 Hz if less is choosen
+	end_if;	
+	
+	if Samplerate > 100 then;
+		Samplerate := 100;							// Set samplerate to 100 Hz if higher is choosen
+	end_if;	
+	TimeRate := (1000/Samplerate)*1000;				// Calc from Hz to ms
+	SSV(Task,P_Sample_p5,Rate,TimeRate);				// Shift sample rate on data collection
+	SSV(Task,P_Sample_p8,Rate,TimeRate);				// Shift sample rate on data collection
+	Samplerate_Old := Samplerate;					// Update parameter
+	GSV(Task,P_Sample_p5,Rate,NewTimeRate_p5);			// Get the time rate
+	GSV(Task,P_Sample_p8,Rate,NewTimeRate_p8);			// Get the time rate
+	
+	if TimeRate = NewTimeRate_p5 and TimeRate = NewTimeRate_p8 then;
+		SampelRateChangeAllowed := 0;				// Stop change again
+		Samplerate_Old := 0;
+	end_if;	
+end_if;	
+
+
+
+// FIFO fill - load raw analog data into array
+if counter >= 0 and counter <= 999 then;								// Test counter values is between array values
+	Flow[counter,0] := (AnalogInputFlow*1)/1000;						// Write Total flow meassure into array 1. dimension
+	Flow[counter,0] := 0;												// Write data read into array 2. dimension
+	FlowAir[counter,0] := (AnalogInputFlowAir*75)/1000;					// Write flowAir meassure into array 1. dimension
+	FlowAir[counter,1] := 0;											// Write data read into array 2. dimension
+	FlowO2[counter,0] := (AnalogInputFlowO2*75)/1000;					// Write flowO2 meassure into array 1. dimension
+	FlowO2[counter,1] := 0;												// Write data read into array 2. dimension
+	PressArr[counter,0] := (AnalogInputPressure*6.37322633125)/1000 ;	// Write pressure meassure into array 1. dimension
+	PressArr[counter,1] := 0;											// Write data read into array 2. dimension
+
+	// ----------------------------------------------------------------------------
+	// -----------------------   C O D E    F R O M    E D B  ---------------------
+	//  All my variables start with _edb.
+	// Filtered values are stored in arrays:
+	//   _edbFlowArrFiltered
+	//   _edbFlowO2Filtered
+	//   _edbPressArrFiltered
+	// Note that initial setup of filters could be moved in a first scan
+	//   initialization routine (code between lines:
+	// *********************  Setup filters  ***************************
+	//   ...
+	// ******************  End of setup filters  ***********************
+	//
+	// I'm assuming here that all filter
+    // are setup in the same way ( same window size, same type, ... ).
+	// In this isnt true the following code must be modified.
+	
+	if counter = 0 then
+
+		// *********************  Setup filters  ****************************
+		// The lines in this section never change. Hence they could be moved
+		// in a first scan initialization.
+		
+			// Set the window size of the filter.
+			// The total window size will be: 2 * _edbHalfWindowFilterSize + 1
+			// Maximum allowed value is 15
+			_edbHalfWindowFilterSize := 5; // To be defined
+		
+		
+			// Set the type of the filter.
+			// Mean filter (1) is basic a convolution and requires setting the
+			//   weights
+			_edbTypeOfFilter  := 0; // 0: MEDIAN; 1: MEAN
+			_edbParUseWeigths := 0; // Not used with a median filter
+			
+			// In case _edbTypeOfFilter = 1 and _edbParUseWeigths := 1
+			// weights must be set.
+			// ...
+			
+			// After having decided the above parameters, let's setup the
+			//   filters:
+			_edbAoiFilterFlowAir.Par_nWindowLeft   := _edbHalfWindowFilterSize;
+			_edbAoiFilterFlowAir.Par_nWindowsRight := _edbHalfWindowFilterSize;
+			_edbAoiFilterFlowAir.Par_eType         := _edbTypeOfFilter;
+			_edbAoiFilterFlowAir.Par_bUseWeights   := _edbParUseWeigths;
+			
+			_edbAoiFilterFlowO2.Par_nWindowLeft   := _edbHalfWindowFilterSize;
+			_edbAoiFilterFlowO2.Par_nWindowsRight := _edbHalfWindowFilterSize;
+			_edbAoiFilterFlowO2.Par_eType         := _edbTypeOfFilter;
+			_edbAoiFilterFlowO2.Par_bUseWeights   := _edbParUseWeigths;
+			
+			_edbAoiFilterPress.Par_nWindowLeft   := _edbHalfWindowFilterSize;
+			_edbAoiFilterPress.Par_nWindowsRight := _edbHalfWindowFilterSize;
+			_edbAoiFilterPress.Par_eType         := _edbTypeOfFilter;
+			_edbAoiFilterPress.Par_bUseWeights   := _edbParUseWeigths;
+		// ******************  End of setup filters  ************************
+		
+		// ******************  Init filters' cycle  ************************
+		// The following lines must be execute when an acquisition cycle starts
+		//  (they cannot be moved in a first scan initialization routine)
+		_edbAoiFilterFlowAir.In_bInitialize := 1;
+		_edbAoiFilterFlowO2.In_bInitialize := 1;
+		_edbAoiFilterPress.In_bInitialize := 1;
+		// **************  End of init filters' cycle  *********************
+
+	end_if;
+	
+	// Calculate filtered values
+	AOI_FilterSignal( _edbAoiFilterFlowAir, AnalogInputFlowAir, _edbParWeights );
+	AOI_FilterSignal( _edbAoiFilterPress, AnalogInputPressure, _edbParWeights );
+	AOI_FilterSignal( _edbAoiFilterFlowO2, AnalogInputFlowO2, _edbParWeights );
+	
+	// Check if initial buffering has finished so we can start storing values.
+	// First _edbHalfWindowFilterSize elements of the array won't be calculated.
+	// Last _edbHalfWindowFilterSize elements of the array won't be calculated as well.
+	_edbCanStore := not _edbAoiFilterFlowAir.Out_Buffering and
+	                not _edbAoiFilterFlowO2.Out_Buffering  and
+					not _edbAoiFilterPress.Out_Buffering   and
+	                counter >= 2 * _edbHalfWindowFilterSize; // This last condition should be true when the previouos conditions are true.
+	if _edbCanStore then
+		_edbIdx := counter - _edbHalfWindowFilterSize; // Calculated filtered data is delayed by _edbHalfWindowFilterSize acquisitions
+		_edbFlowArrFiltered[_edbIdx,0] := _edbAoiFilterFlowAir.Out_rFilteredSignalDelayed;
+		_edbFlowArrFiltered[_edbIdx,1] := 0;
+		_edbFlowO2Filtered[_edbIdx,0] := _edbAoiFilterPress.Out_rFilteredSignalDelayed;
+		_edbFlowO2Filtered[_edbIdx,1] := 0;
+		_edbPressArrFiltered[_edbIdx,0] := _edbAoiFilterFlowO2.Out_rFilteredSignalDelayed;
+		_edbPressArrFiltered[_edbIdx,1] := 0;
+	end_if;
+	// ---------------  E N D    O F   C O D E    F R O M    E D B  ---------------
+	// ----------------------------------------------------------------------------
+	
+	counter := counter +1;								// next count
+end_if;	
+
+if counter >= 999 then;									// If count is at end of array
+	counter := 0;										// Reset counter
+end_if;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p5____________________________________________________________________________________________
+//Name: ISR_ValveCtrl - Main
+Pressure := 100.0/16000.0 * (AnalogInputPressure - 4000.0);
+//PressHtreshold := ((PressHtresholdUser1/100.0)*16000.0)+4000.0;
+
+
+// Control that either inspiratory or expiratory is set
+if (Insp and Exp) or (not Insp and not Exp) then;
+	if inspCount < inspCountLength and expCount < expCountLength then;
+		Exp := 1;											// Select expiatory
+		Insp := 0;											// Deselect inspiratory
+	end_if;	
+	if inspCount < inspCountLength then;
+		Insp := 1;											// Select inspiraty
+		Exp := 0;											// DeSelect expiatory
+	end_if;
+	if expCount < expCountLength then;
+		Insp := 0;											// Deselect inspiratory
+		Exp := 1;											// Select expiatory
+	end_if;
+end_if;
+
+if VentOn then;	
+	
+	if StateValveCtrl = 0 then;
+				
+		// Control if Inspiratory or expiatory 
+		if Insp then;
+			StateValveCtrl :=10;								// Inspiratory
+			if _StartPosition <> _StartpositionOld then;
+				_StartPosition := counter;
+				_StartpositionOld := _StartPosition;
+			end_if;	
+		end_if;
+		
+		if Exp then
+			StateValveCtrl :=100;								// Expiatory
+		end_if;	
+	End_if;
+
+	if StateValveCtrl = 10 then;
+		// Start of the Inspiratory 	
+		inspCount := inspCount +1;								// Count inspiratory up one in the cycle
+		expCount := 0;											// Reset expiatory counter
+		if Pressure > PressHtresholdUser1 then;							// Analog pressure High warning is high from input
+			StateValveCtrl := 11;								// Go to high pressure routine
+		else	
+			StateValveCtrl := 20;								// Go to normal routine
+		end_if;
+	end_if;		
+			
+	if StateValveCtrl = 11 then;		
+		// Close valves - high alarm on the Analog input will disapear when preassure is lower than high alarm
+		AnalogOutFlowO2 := 0;											// Close O2 valve
+		AnalogOutFlowAir := 0;											// Close Air Valve
+		expOpen :=1;											// Output - Open expiatory valve
+		StateValveCtrl := 30;									// Next state 
+	end_if;		
+				
+	if StateValveCtrl = 20 then;			
+		// Normal routine - set values to open valve	
+		expOpen := 0;											// Output - close the expiatory valve
+		MCSV(GetSlaveValue, O2Up, inspO2FlowCtrl[inspCount], O2mAOut, O2mASlope, O2mADer); 
+		AnalogOutFlowO2 := 1.03*O2mAOut;								// Set value to analog output control of O2
+		MCSV(GetSlaveValue, AirUp, inspAirFlowCtrl[inspCount], AirmAOut, AirmASlope, AirmADer); 
+		AnalogOutFlowAir := 1.03*AirmAOut;							// Set value to analog output control of Air
+		StateValveCtrl := 30;									// Next state 
+	end_if;
+
+	if StateValveCtrl = 30 then;
+		// Control if inspiratory has ended	
+		if inspCount >= inspCountLength then;					// The Inspiratory has ended
+			Insp :=	0;											// Deselect inspiratory
+			Exp := 1;											// Select expiatory
+			
+			if newInspFlowAvil then;							// New Inspiratory data is avalible
+				StateValveCtrl :=31;							// Set to new data for next cyclus is avalible
+			else
+				StateValveCtrl :=0;								// Start over
+			end_if;	
+		else
+			StateValveCtrl :=0;									// Start over
+		end_if;
+	end_if;
+
+	if StateValveCtrl = 31 then;
+
+		COP(nextInspO2FlowCtrl[0], inspO2FlowCtrl[0], 650);		// Copy new O2 data to next inspiratory
+		COP(nextInspAirFlowCtrl[0], inspAirFlowCtrl[0], 650);	// Copy new Air data to next inspiratory
+		inspCountLength := nextInspCountLength;					// Copy new lenght of inspiratory
+		newInspFlowAvil := 0;									// Reset new Inspiratory data is avalible
+		StateValveCtrl := 0;									// Start over
+
+	end_if;
+			
+	if StateValveCtrl = 100 then;		
+		// Start of the Expiatory	
+		expCount := expCount +1;									// Count expiratory up one in the cycle
+		inspCount := 0;												// Reset inspiratory counter 
+		AnalogOutFlowO2 := 0;												// Close Inspiratory O2 valve
+		AnalogOutFlowAir := 0;												// Close Inspiratory Air valve
+		expOpen := expOpenCloseCtrl[expCount].0;					// Set state of expiratory valve
+		
+		if expCount >= expCountLength then;
+			StateValveCtrl :=101;									// The Expiratory has ended 
+			if _endPosition <> _endPositionOld then;
+				_endPosition := counter;
+				_endPositionOld := _endPosition;
+			end_if;	
+		else
+			StateValveCtrl :=0;										// Start over
+		end_if;
+	end_if;			
+
+	if StateValveCtrl = 101 then;
+		Insp :=1;													// Select inspiratory				
+		Exp := 0; 													// DeSelect expiatory
+		
+		if flowCalcOn then;
+		
+			_StartPointBerfore := _StartPointBerfore;
+			_StartPosition:= _StartPosition;
+			_endPosition := _endPosition ;
+			_PointAfterEnd := _PointAfterEnd; 
+
+			
+			if (_endPosition -_StartPosition) + _StartPointBerfore +_PointAfterEnd < 999 then;
+				
+				if _endPosition - _StartPosition > 0 then		  
+
+					StartSendPosition := _StartPosition - _StartPointBerfore;
+
+					if StartSendPosition < 0 then
+
+					_CopSource := 999 + StartSendPosition;
+					_CopLength := abs(StartSendPosition+1)*2;
+					COP(FlowAir[_CopSource,0],FlowArrMem[0,0],_CopLength);
+					COP(FlowO2[_CopSource,0],FlowO2Mem[0,0],_CopLength);
+					COP(PressArr[_CopSource,0],PressArrMem[0,0],_CopLength);
+
+					_CopSource1 := 0;
+					_CopDes1 := _CopLength + 1;
+					_CopLength1 := abs(StartSendPosition)+1;
+					COP(FlowAir[_CopSource1,0],FlowArrMem[_CopDes1 ,0],_CopLength1);
+					COP(FlowO2[_CopSource1,0],FlowO2Mem[_CopDes1 ,0],_CopLength1);
+					COP(PressArr[_CopSource1,0],PressArrMem[_CopDes1 ,0],_CopLength1);
+
+				else
+
+					_CopSource3 := StartSendPosition+1;
+					_CopLength3 :=_StartPointBerfore*2;
+					COP(FlowAir[_CopSource3,0],FlowArrMem[0,0],_CopLength3);
+					COP(FlowO2[_CopSource3,0],FlowO2Mem[0,0],_CopLength3);
+					COP(PressArr[_CopSource3,0],PressArrMem[0,0],_CopLength3);
+
+				end_if;
+
+				_EndSendPosition := _endPosition + _PointAfterEnd;
+				
+				If _EndSendPosition > 999 then
+				
+					_CopSource4 := _StartPosition + 1; 
+					_CopDes4 := _StartPointBerfore;
+					_CopLength4 := ( 999 - _StartPosition + 1)*2;
+					COP(FlowAir[_CopSource4,0],FlowArrMem[_CopDes4,0],_CopLength4);
+					COP(FlowO2[_CopSource4,0],FlowO2Mem[_CopDes4,0],_CopLength4);
+					COP(PressArr[_CopSource4,0],PressArrMem[_CopDes4,0],_CopLength4);
+
+					_CopSource5 := 0;
+					_CopDes5 := _CopDes4 + 999 - _StartPosition;
+					_CopLength5 := (_EndSendPosition - 999) *2;
+					COP(FlowAir[_CopSource5,0],FlowArrMem[_CopDes5,0],_CopLength5);
+					COP(FlowO2[_CopSource5,0],FlowO2Mem[_CopDes5,0],_CopLength5);
+					COP(PressArr[_CopSource5,0],PressArrMem[_CopDes5,0],_CopLength5);
+
+				else
+					
+					_CopSource6 := _StartPosition;
+					_CopDes6 := _StartPointBerfore;
+					_CopLength6 := (_EndSendPosition - _StartPosition) * 2;
+					COP(FlowAir[_CopSource6,0],FlowArrMem[_CopDes6,0],_CopLength6);
+					COP(FlowO2[_CopSource6,0],FlowO2Mem[_CopDes6,0],_CopLength6);
+					COP(PressArr[_CopSource6,0], PressArrMem[_CopDes6,0],_CopLength6);
+
+				End_if;
+
+				else
+				 
+					StartSendPosition := _StartPosition - _StartPointBerfore;
+					_CopSource7 := StartSendPosition;
+					_CopLength7 := (999 - StartSendPosition + 1) *2;
+					COP(FlowAir[_CopSource7,0],FlowArrMem[0,0],_CopLength7);
+					COP(FlowO2[_CopSource7,0],FlowO2Mem[0,0],_CopLength7);
+					COP(PressArr[_CopSource7,0], PressArrMem[0,0],_CopLength7);
+
+					_EndSendPosition := _endPosition + _PointAfterEnd;
+					_CopSource8 := 0;
+					_CopDes8 := (999 - StartSendPosition +1);
+					_CopLength8 := _EndSendPosition *2;
+					COP(FlowAir[_CopSource8,0],FlowArrMem[_CopDes8,0],_CopLength8);
+					COP(FlowO2[_CopSource8,0],FlowO2Mem[_CopDes8,0],_CopLength8);
+					COP(PressArr[_CopSource8,0], PressArrMem[_CopDes8,0],_CopLength8);
+					
+				end_if;	 
+			end_if;
+
+			_endPositionOld :=0;
+			_StartpositionOld := 0;
+			CalcNewData := 1;
+
+		else
+		 
+		 CalcNewData := 0;
+		 
+		end_if;	 
+			 	
+		if NewExpOpenCloseAvail then;								// New Expiatory data is avalible
+			StateValveCtrl := 102;									// Next state
+		else
+			StateValveCtrl := 0;									// Start over
+		end_if;
+	end_if;
+
+	if StateValveCtrl = 102 then;
+		COP(nextExpOpenCloseCtrl[0], expOpenCloseCtrl[0], 1000);	// Copy new close/open data to next expiatory
+		expCountLength := nextExpCountLength;						// Copy new lenght of expiatory 
+		NewExpOpenCloseAvail := 0;									// Reset Expiatory data is avalible
+		StateValveCtrl := 0;										// Start over
+		
+	end_if;
+end_if;	
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: Setup - Main
+
+case SetupState of
+	
+	10: JSR(InitVariables,0);			// Jump to Init Variables
+		SetupState := 20;				// Set next state
+	
+	20:	JSR(InitGUI,0);					// Jump to Init GUI
+		SetupState := 30;				// Set next state
+	
+	30:	JSR(InitISR_RS232);				// Jump to init ISR_RS232
+		SetupDone :=1;					// Set Setup Done
+		SetupState := 99;				// Sequence Done
+
+end_case;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: Setup - InitGUI
+
+// Init program of the GUI (HMI panel)
+// Write initial coder here
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: Setup - InitISR_RS232
+
+// Init program of the ISR_RS232 AI controller
+// Write initial coder here
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: Setup - InitVariables
+
+// Init program of the Init varables for the program
+// Write initial coder here
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: calcBreath - Main
+
+//Saves o2 and air inspiratory flows in l/min as 100 Hz arrays for ISR_valveCtrl() to
+//read and convert to a current securing these defined flows delivered to
+//the patient.
+
+if StateCalcBreath = 10 then;
+
+	//Calculate durations
+	inspPauseTimePercent := inspPauseTime/100; 	//Percentage of whole inspIE_In where there is a pause (in the end)
+	inspRampTimePercent := inspRampTime/100; 	//Percentage of active inspIE_In (when there is flow)
+	BreathDurationInMS := (1/RRate) * 60000;
+	inspTimeinMS := IE_I * (BreathDurationInMS/(IE_I+IE_E));
+	totalCount := BreathDurationInMS/valveUpdInterval;
+	inspCounts := inspTimeinMS/valveUpdInterval;
+	AOI_Floor(Floor,inspCounts,inspCountLengthNew);
+	expTimeInMS := BreathDurationInMS - inspTimeinMS;
+	expCountlengthCalc := totalCount-inspCountLengthNew;
+	AOI_Floor(Floor, expCountlengthCalc, expCountLengthNew);
+	
+	//Calculate part of inspIE_In where valves are open
+	inspPauseTimeInMS := inspPauseTimePercent * BreathDurationInMS;
+	InspiratoryRampTimeInMS := inspRampTimePercent * BreathDurationInMS;
+	ConstantFlowTimeInMS := inspTimeinMS - inspPauseTimeInMS - InspiratoryRampTimeInMS;
+	
+
+	//Calculate flow in L/min required to reach Vt in active inspIE_In
+	//(assuming a linear ramp)
+	ConstantInspiratoryFlow := 1/(ConstantFlowTimeInMS+0.5*InspiratoryRampTimeInMS)*Vt*60;
+
+	//This needs to be warned to the user - We will need a handle in HMI to not
+	//allow such settings if we are stuck with this limit on max flow
+	if ConstantInspiratoryFlow > maxFlowAllowed then;
+	    COP(Messages_to_user[2], message, 82);
+	end_if;
+
+	//Calculate split between O2 and Air
+	FractionAir := ((1-FiO2/100)/0.79);
+	FractionO2 := 1 - FractionAir;
+
+	//Calculate Ramp samples for O2 and Air
+	O2ConstantFlow := FractionO2 * ConstantInspiratoryFlow; 		//L/min
+	AirConstantFlow := FractionAir * ConstantInspiratoryFlow; 		//L/min
+
+	RampNrCalc := InspiratoryRampTimeInMS/valveUpdInterval;
+	AOI_Floor(Floor, RampNrCalc,RampNrOfAdjustments);
+	O2RampFlowIncreasePerAdjust := O2ConstantFlow/RampNrOfAdjustments;
+	AirRampFlowIncreasePerAdjust := AirConstantFlow/RampNrOfAdjustments;
+
+	ConstansFlowNrCalc := ConstantFlowTimeInMS/valveUpdInterval;
+	AOI_Floor(Floor, ConstansFlowNrCalc,ConstantFlowNrOfAdjustments );
+	inspPauseCalc := inspPauseTimeInMS/valveUpdInterval; 
+	AOI_Floor(Floor, inspPauseCalc,inspPauseNrOfAdjustments );
+
+	//Build control arrays
+	AOI_FillArrayReal(Fill, inspO2FlowCtrlNew, 0, 650);
+	AOI_FillArrayReal(Fill, inspAirFlowCtrlNew, 0, 650);
+	AOI_FillArrayInt(Fillint, expOpenCloseCtrlNew, 0, 1000);
+
+	//inspiratory
+	for i :=0 to inspCountLengthNew by 1 do;
+	    if i <= RampNrOfAdjustments then;
+	        RampTime[i] := valveUpdInterval*(i-1);
+	        inspO2FlowCtrlNew[i] := i *  O2RampFlowIncreasePerAdjust;
+	        inspAirFlowCtrlNew[i] := i *  AirRampFlowIncreasePerAdjust;
+	    elsif i > RampNrOfAdjustments and i < RampNrOfAdjustments+ConstantFlowNrOfAdjustments then;
+	        inspO2FlowCtrlNew[i] := O2ConstantFlow;
+	        inspAirFlowCtrlNew[i] := AirConstantFlow;
+	    elsif i > (RampNrOfAdjustments+ConstantFlowNrOfAdjustments) and i <= (RampNrOfAdjustments+ConstantFlowNrOfAdjustments+inspPauseNrOfAdjustments) then;
+	        inspO2FlowCtrlNew[i] := 0;
+	        inspAirFlowCtrlNew[i] := 0;
+	    end_if;		
+	end_for;
+
+	//expiratory
+	AOI_FillArrayInt(Fillint, expOpenCloseCtrlNew, 1, expCountLengthNew);
+
+	// Copy calculated data for Inspiratoty to next breath cycles
+	COP(inspO2FlowCtrlNew[0], nextInspO2FlowCtrl[0], 650);
+	COP(inspAirFlowCtrlNew[0], nextInspAirFlowCtrl[0], 650);
+	nextInspCountLength := inspCountLengthNew;
+	
+	// Copy calculated data for Expiratory to next breath cycles
+	COP(expOpenCloseCtrlNew[0], nextExpOpenCloseCtrl[0], 1000);
+	nextExpCountLength := expCountLengthNew;
+	
+	NewSettings := 0;
+	newInspFlowAvil := 1;
+	NewExpOpenCloseAvail:= 1;
+	StateCalcBreath := 0;
+	
+end_if;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: initVent - Main
+
+case StateInitVent of
+	
+	10: 																// Prepare for transfer of data from calcBreath routine
+		
+		COP(nextInspO2FlowCtrl[0], inspO2FlowCtrl[0], 650);				// Copy calculated data to running data		
+		COP(nextInspAirFlowCtrl[0], inspAirFlowCtrl[0], 650);			// Copy calculated data to running data		
+		COP(nextExpOpenCloseCtrl[0], expOpenCloseCtrl[0], 1000);		// Copy calculated data to running data		
+		inspCountLength := nextInspCountLength;							// Copy lenght of inspiratory array calculated to runnung data
+		expCountLength := nextExpCountLength;							// Copy lenght of expiratory array calculated to runnung data
+		
+		if inspCountLength >20 and expCountLength >20 then;				// Check values is correct
+			StateInitVent := 20;										// Set next stage
+		else
+			StartVent :=0;												// Stop ventilation
+			VentOn := 0; 												// Set do not run to ISR_ValveCtrl
+			COP(Messages_to_user[1], message, 82);						// Write to user that lenght insp or exp is not ok
+		end_if;
+		
+		
+	20:
+		JSR(initISR_ValveCtrl);											// Jump to init for ISR_ValveCtrl - only runs once
+		JSR(Init_ISR_PressWatchID);										// Jump to init for ISR_PressWatchID - only runs once
+		
+		VentOn := 1; 													// Set start to ISR_ValveCtrl
+		StartVent := 0;													// Reset start bit
+		StateInitVent := 99;											// Set sequence finished state	
+	
+end_case;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: initVent - initISR_ValveCtrl
+
+// Init of Valve Control
+// Routine only runs once
+
+// Fill BreathDurationArr with -1 only on first breath, for messuring average values
+AOI_FillArrayReal50(Fill50,BreathDurationArr, -1, 50);
+flowCalcOn := 0;		// No calculation of messurement - set to 1 if messurement ***** TEMP Soulution *****
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: initVent - init_ISR_PressWatchId
+
+// Init of Pressure Watch 
+// Routine only runs once
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: BreathDetect - Main
+
+//empty
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: measCalc - Main
+
+// from inflow and press alone (may require filtering such as mean/median!)
+// Only check indices with FlowArr[0,x]=0, meaning not analysed yet
+
+if CalcNewData then;
+
+	inspStartI := 0;
+	expStartI := 0;
+	expEndI := 0;
+
+	for _i := 1 to 999 by 1 do
+		
+		if FlowArrMem[_i,1] = 0 then;												// Check if data is read already
+			
+			if inspStartI = 0 then;													// If Inspiratory start point not found 
+				
+				//Start of insp is at shift from flow of zero to flow of >0.
+
+				if FlowArrMem[_i-1,0] = 0 and FlowArrMem[_i,0] > 0 then;			// If start of climing flow, were last point was zero and this point has a value
+					inspStartI := _i ;												// Set Inspiratory start point
+				end_if;
+			end_if;
+				
+			if inspStartI > 0 and expStartI = 0 then;								// If Inspiratory start point found but nor the Expiratory point
+				
+				//Start of exp is at shift from to flow of >0 to flow of zero.
+				
+				if FlowArrMem[_i-1,0] > 0 and FlowArrMem[_i,0] = 0 then;			// If end of climing flow, and start of Pplat + Pplat time 
+					if Mode = RunModes[0] then;										// If mode is VC
+						inspPauseStartI := _i;										// Set inspiratory pause start point
+						expStartI := _i + ABS(tipause/(TimeRate/1000));				// Set Expiratory start point
+					else
+						expStartI := _i;											// Set Expiratory start point
+					end_if;
+				end_if;	
+			end_if;	
+				
+			if inspStartI > 0 and expStartI > 0 and expEndI = 0 then;				// If Inspiratory start point found and the Expiratory start point, but not Expiratory end point
+			
+				//End of exp is at shift from to flow of zero to flow of >0.
+				
+				if FlowArrMem[_i-1,0] = 0 and FlowArrMem[_i,0] > 0 then;			// If flow is zero and detection of new breath 
+					expEndI := _i - 1;												// Set Expiratory end point
+				end_if;
+			end_if;
+		end_if;	
+	end_for;
+
+	// Check of iligal calculation that would bring the controller in Major fault
+	if inspStartI <1 then;
+		inspStartI :=1 ;
+	end_if;
+	
+	if expStartI <1 then;
+		expStartI := inspStartI +1;
+	end_if;	
+	
+	if expEndI < 1 then;
+		expEndI := expStartI +1;
+	end_if;	
+
+	// Set all calculations vaerables for breath
+
+	// Breathduration
+	BreathDuration := ((expEndI-inspStartI+1)/Samplerate);
+	RR := (60/BreathDuration);
+
+	// in area with inflow=0 before insp start --> PEEP
+	PEEP := PressArrMem[inspStartI-1,0];
+
+	// in area with inflow=0 check for increase in press (Exp pause, exp flow=0) --> PEEP+PEEPi
+	// NOTE as exp pause cannot be detected this is not possible at the moment,
+	// but should be done here
+	//PEEP := (PEEP+PEEPi)-PEEP;
+
+	// Ppeak = Max pressure during insp 
+	// NOTE: will require filtering, e.g. moving average 
+
+	AOI_Max(PpeakMaxValue,PressArrMem, 0, inspStartI, expStartI);
+	Ppeak := PpeakMaxValue.Out_Max;							
+
+	// Flowi,max = max flow during insp 
+	// NOTE: will require filtering e.g. moving average, should be around same
+	// sample range as Ppeak
+	// in VC this is the constant delived level of insp Flow
+
+	AOI_Max(FlowImaxValue, FlowArrMem, 0,inspStartI, expStartI);
+	FlowImax := FlowImaxValue.Out_Max;
+
+	// Pplat = pressure at period immediately following inFlow=0 where
+	// pressure equilibrates
+	// only available if insp pause was performed
+	// Calculated as mean of last fifth of the pause period
+
+	if inspPauseStartI > 0 then;
+		StartPointValue := (inspPauseTimeInMS/1000) * Samplerate*PplatBreathFrac;		
+		AOI_Round(Round, StartPointValue, StartPointMean);
+		StartPoint := expStartI-StartPointMean-1;
+		EndPoint := expStartI-1;
+	AOI_Mean2D(PplatMean, PressArrMem, 0, StartPoint, EndPoint);
+		Pplat := PplatMean.Out_Mean; 
+	else
+		Pplat := 0;
+	end_if;
+
+	//Vti = integrate inFlow(insp start to exp start)
+
+	for _J := inspStartI to expStartI by 1 do
+	    Vti := Vti + FlowArrMem[_J,0] * (1/(Samplerate*60));
+	end_for;
+
+	//MV = RR*Vti
+
+	MV := RR*Vti;
+
+	//Raw = (Ppeak-Pplat)/Flowi,max    %NOTE: in cmH2O/l/s (different time
+	//unit than Flowi,max at l/min
+	//only available if insp pause was performed so that we have Pplat
+	//assumes FlowIMax is at PIP
+
+	if inspPauseStartI > 0 then;
+	    Raw := (Ppeak-Pplat)/(FlowImax/60);   //FlowIMax/60 to go from l/min to l/s as Raw is in units of l/s
+	else
+	    Raw := 0;
+	end_if;
+
+	//Crs_dyn = Vt/(Ppeak-PEEP)
+	CrsDyn := Vti/(Ppeak-PEEP);
+
+	//Crs_qstat = Vt/(Pplat-PEEP)
+	if inspPauseStartI > 0 then;
+	    CrsQStat := Vti/(Pplat-PEEP);
+	else
+	    CrsQStat := 0;
+	end_if;
+
+
+	//set second dimension status marker in FlowArr and PressArr to 1 from
+	//inspStartI to expEndI to indicate that this breath has been analysed
+	for _n := inspStartI to expEndI+1 by 1 do
+		
+		//FlowArrMem[_n,1] := 1;
+		//PressArrMem[_n,1] := 1;
+		
+	end_for;
+
+
+	for _T := 49 to 1 by -1 do
+
+		PpeakArr[_T] := PpeakArr[_T-1];
+		PEEPArr[_T] := PEEPArr[_T-1];
+		FlowImaxArr[_T] := FlowImaxArr[_T-1];
+		PplatArr[_T] := PplatArr[_T-1];
+		RRArr[_T] := RRArr[_T-1];
+		VtiArr[_T] := VtiArr[_T-1];
+		MVArr[_T] := MVArr[_T-1];
+		CrsDynArr[_T] := CrsDynArr[_T-1];
+		CrsQStatArr[_T] := CrsQStatArr[_T-1];
+		RawArr[_T] := RawArr[_T-1];
+		BreathDurationArr[_T] := BreathDurationArr[_T-1];
+
+	end_for;
+
+		PpeakArr[0] := Ppeak;
+		PEEPArr[0] := PEEP;
+		FlowImaxArr[0] := FlowImax;
+		PplatArr[0] := Pplat;
+		RRArr[0] := RR;
+		VtiArr[0] := Vti;
+		MVArr[0] := MV;
+		CrsDynArr[0] := CrsDyn;
+		CrsQStatArr[0] := CrsQStat;
+		RawArr[0] := Raw;
+		BreathDurationArr[0] := BreathDuration;
+		
+		
+	//in case there is not a minute of measurements available yet, then calculate
+	//from the available entries in array
+	//This could be signaled by setting all values in array as -1 until they
+	//have been used, this is done by initVent
+	//I asume here that if an entry is -1 then it is not available
+		
+	for _z := 1 to 49 by 1 do
+	    if BreathDurationArr[_z] = -1 and _z = 1 then;
+	        //(disp('error, no breath by breath measurements available');
+	        _z :=50;										// Break the for loop
+	    end_if;
+	    if _z < 50 then;
+			if BreathDurationArr[_z] = -1 then;
+	        	endI := i-1;
+	        	_z :=50;
+			end_if;	
+	    end_if;
+		
+		if _z < 49 then;
+	    	totTime := totTime+BreathDurationArr[_z];
+		end_if;	
+	    if totTime >= 60 then;
+	        endI := _z;
+	        _z :=50;
+	    end_if;
+	end_for;
+		
+		
+	// Calculate the average from last minute
+
+	AOI_Mean50(Mean50, PpeakArr, 1, endI);			//1 min avg of peak insp pressure in cmH2O
+	avgPpeak :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, PEEPArr, 1, endI);			//1 min avg of positive end expiratory pressure in cmH2O
+	avgPEEP :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, FlowImaxArr, 1, endI);		//1 min avg of max insp flow in l/min
+	avgFlowImax :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, PplatArr, 1, endI);			//1 min avg of plateau insp pressure in cmH2O
+	avgPplat :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, RRArr, 1, endI);				//1 min avg of respiratory rate in 1/min
+	avgRR :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, VtiArr, 1, endI);			//1 min avg of insp tidal volume in ml
+	avgVti :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, MVArr, 1, endI);				//1 min avg of minute ventilation in l/min
+	avgMV :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, CrsDynArr, 1, endI);			//1 min avg of dynamic respiratory system compliance in ml/cmH2O
+	avgCrsDyn :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, CrsQStatArr, 1, endI);		//1 min avg of quasistatic respiratory system compliance in ml/cmH2O
+	avgCrsQStat :=Mean50.Out_Mean;						// Output of mean
+	AOI_Mean50(Mean50, RawArr, 1, endI);			//1 min avg of airway resistance in cmH2O/l/s
+	avgRaw :=Mean50.Out_Mean;						// Output of mean
+
+	CalcNewData :=0;
+	AOI_FillArray_Real2D(FillLoop,FlowArrMem,0,2000);			// Clear all raw data
+	AOI_FillArray_Real2D(FillLoop,FlowO2Mem ,0,2000);			// Clear all raw data
+	AOI_FillArray_Real2D(FillLoop,PressArrMem,0,2000);			// Clear all raw data
+	
+end_if;
+
+//New file////////////////////////////////////////////////////////////////////
+//P_Sample_p8________________________________________________________________________________________________________________________________________________________________________________________
+//Name: MainFlow - Main
+
+// Set MainFlow to start over
+if StateMain = 0 then;
+	StateMain := 10;
+end_if;	
+
+IE_E := IE_counter +1;
+
+// see if new data is valible from GUI
+CsumData := FiO2+Vt + RRate + IE_I + IE_E + inspPauseTime + inspRampTime;
+
+If CsumData <> CsumDataOld then;
+	CsumDataOld := CsumData;
+	NewSettings :=1;
+	FiO2Running := FiO2;
+	VtRunning := Vt;
+	RRateRunning := RRate;
+	IE_IRunning := IE_I;
+	IE_ERunning := IE_E;
+	inspPauseTimeRunning := inspPauseTime;
+	inspRampTimeRunning := inspRampTime;
+end_if;	
+	
+
+
+// MainFlow sequence	
+case StateMain of
+	
+	// Run Setup
+	10: if SetupDone then;						// If setup is done
+			StateMain := 20;					// Set next stage	
+			SetupState := 0;	
+		
+		else
+			
+			if SetupState = 0 then;
+				SetupState := 10;
+			end_if;								// Start the setup program
+			
+		end_if;
+		
+	// Run CalcBreath	
+	20:	if NewSettings then;					// If changes has happend on the GUI
+			
+			if StateCalcBreath = 0 then;
+				StateCalcBreath := 10;				// Start the CalcBreath setup
+			end_if;
+		else
+			StateMain := 30;					// Set next stage
+		end_if;	
+	
+	// Stop Ventilation
+	30: if StopVent then;													// Stop ventilation
+			if Exp then
+				if expCount > (expCountLength - 20) then; 					// Stop ventilatio 20*scanrate befor expiratory ends
+					VentOn :=0 ;											// Stop ventilation routine
+					AOI_FillArray_Real2D(FillLoop,FlowAir,0,2000);				// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,FlowO2,0,2000);				// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,PressArr,0,2000);				// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,FlowArrMem,0,2000);			// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,FlowO2Mem ,0,2000);			// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,PressArrMem,0,2000);			// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,_edbFlowArrFiltered,0,2000);	// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,_edbFlowO2Filtered,0,2000);	// Clear all raw data
+					AOI_FillArray_Real2D(FillLoop,_edbPressArrFiltered,0,2000);	// Clear all raw data
+					StopVent := 0;											// Reset the stop command
+					Insp := 1;												// Select inspiratory next start first
+					Exp := 0;												// Deselect expiratory next start
+					expCount := 0;											// Reset the expiratory count
+					StateMain := 0;											// Reset sequence and start over
+				
+				end_if;	
+			end_if;	
+		else
+			StateMain := 40;									// Set next stage
+		end_if;	
+			
+	// Run initVent		
+	40:	if StartVent then;										// If ventilator is started
+	
+			if StateInitVent = 0 then;			
+				StateInitVent := 10;						// Start the initVent program
+			end_if;
+			
+		else	
+			
+			StateMain := 0;
+			StateInitVent :=0;
+			
+		end_if;	
+
+end_case;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Ceil
+
+AOI_Trunc( _aoiTrunc, In_X, _trunc );
+_n := _trunc;
+if _n < In_X then
+	_n := _n + 1;
+end_if;
+Out_Ret := _n;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_FilterSignal - Logic
+if ER and not ( _bFirstScan or In_bInitialize ) then
+	tnd();
+end_if;
+
+// Initialization
+if In_bInitialize or _bFirstScan then
+	ER  := 0;
+	Err := 0;
+	_idx := 0;
+	_nBufferUsage := 0;
+
+	// Validate parameters
+	_nTmp := Par_nWindowLeft + Par_nWindowsRight + 1;
+	if Par_nWindowLeft   < 0 then Err := 1; end_if;
+	if Par_nWindowsRight < 0 then Err := 2; end_if;
+	if _nTmp > _nM  then Err := 3; end_if;
+	if Par_eType <> 0 and Par_eType <> 1 then Err := 4; end_if;
+	if Err <> 0 then
+		ER := 1;
+		tnd();
+	end_if;
+
+	// Store parameters ( make filter behaviour independent from outside
+	//   parameters' changes ).
+	_bW := Par_bUseWeights;
+	_n0 := Par_nWindowLeft;
+	_n1 := Par_nWindowsRight;
+	_nN := _nTmp;
+	_n2 := _nN / 2;
+	_bOdd := ( _nN mod 2 ) = 1; // neighbourhood window composed of a odd number of points
+	_eType := Par_eType;
+	cop( Par_rWeights[0], _rWs[0], _nN );
+	_srt.POS := 0;
+	_srt.LEN := _nN;
+	_w := 1.0;
+	_rSumW := _nN;
+	if _bW then
+		_rSumW := 0.0;
+		for _i := 0 to _nN - 1 do
+			_rSumW := _rSumW + _rWs[_i];
+		end_for;
+	end_if;
+
+end_if;
+_bFirstScan := 0;
+In_bInitialize := 0;
+
+// While buffering data the filter isn't applied
+_rRawBuf[ _idx ] := In_rRawSignal;
+if _nBufferUsage < _nN then _nBufferUsage := _nBufferUsage + 1; end_if;
+Out_Buffering := _nBufferUsage <> _nN;
+
+if not Out_Buffering then
+	
+	case _eType of
+
+		0: // MEDIAN
+		// Very simple implementation but not very efficient.
+		//   It's ok here because a single filtered value is
+		//   calculated at every scan of the plc.
+		// I'm using firmware instruction SRT to
+		//   sort the buffer array, because it's faster
+		//   than anything that could be implemented in
+		//   structure text. In case SRT isn't available in
+		//   other PLCs, a sorting algorithm could be implemented.
+		//   For example, in file sort/sort.c of the Gnu Scientific
+		//     Library (ftp://ftp.gnu.org/gnu/gsl/) there is an
+		//     implementation of the heap sort algorithm.
+		// TODO: replace the SRT instruction with such GLS
+		//       implementation so that this code can be reused
+		//       in any PLC.
+		cop( _rRawBuf[0], _rBufSorted[0], _nN );
+		SRT( _rBufSorted, 0, _srt );
+		if _bOdd then
+			Out_rFilteredSignalDelayed := _rBufSorted[_n2];
+		else
+			Out_rFilteredSignalDelayed := 0.5 * ( _rBufSorted[_n2-1] + _rBufSorted[_n2] );
+		end_if;
+		
+		1: // MEAN
+		// Note: instruction MAVE could be used here, but I find
+		//       the following code clearer. Moreover the code
+		//       can be used in any PLC which doesn't include the
+		//       MAVE instruction.
+		_rSum := 0.0;
+		for _i := 0 to _nN - 1 do
+			if _bW then _w := _rWs[_i]; end_if;
+			_rSum := _rSum + _w * _rRawBuf[ ( _idx + 1 + _i ) mod _nN ];
+		end_for;
+		Out_rFilteredSignalDelayed := _rSum / _rSumW;
+
+	end_case;
+
+end_if;
+
+_idx := ( _idx + 1 ) mod _nN;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_FilterSignal - Prescan
+
+// Calulate _nN = minimum between size( Par_rWeights ), size(_rWs), size(_rBuf) and size(_rBufSorted)
+size( _rWs, 0, _nM );
+size( _rRawBuf, 0, _nTmp );
+if _nTmp < _nM then _nM := _nTmp; end_if;
+size( _rBufSorted, 0, _nTmp );
+if _nTmp < _nM then _nM := _nTmp; end_if;
+size( Par_rWeights, 0, _nTmp );
+if _nTmp < _nM then _nM := _nTmp; end_if;
+
+// Used for initialization
+_bFirstScan := 1;
+
+// Data must be buffered at the beginning
+Out_Buffering := 1;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Floor - Logic
+
+_n := In_X;
+if In_X < _n then
+	_ret := _n - 1;
+else
+	_ret := _n;
+end_if;
+Out_Ret := _ret;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Max - Logic
+
+ER  := 0;
+Err := 0;
+
+// Some checks
+if In_MainIndex < 0 or _maxDim1 <= In_MainIndex then Err := 1; end_if;
+if In_N0 < 0        or _maxDim0 <= In_N0        then Err := 2; end_if;
+if In_N1 < 0        or _maxDim0 <= In_N1        then Err := 3; end_if;
+if In_N0 > In_N1                                then Err := 4; end_if;
+if Err <> 0 then
+	ER := 1;
+	tnd();
+end_if;
+
+// Find maximum
+_max := In_Array[ In_N0, In_MainIndex ];
+for _i := In_N0 + 1 to In_N1 do
+	_tmp := In_Array[ _i, In_MainIndex ];
+	if _max < _tmp then _max := _tmp; end_if;
+end_for;
+Out_Max := _max;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Max - Prescan
+
+size( In_Array, 0, _maxDim0 ); // Dimension 0 is the most right index
+size( In_Array, 1, _maxDim1 );
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Mean2D - Logic
+
+ER  := 0;
+Err := 0;
+
+// Some checks
+if In_MainIndex < 0 or _maxDim1 <= In_MainIndex then Err := 1; end_if;
+if In_N0 < 0        or _maxDim0 <= In_N0        then Err := 2; end_if;
+if In_N1 < 0        or _maxDim0 <= In_N1        then Err := 3; end_if;
+if In_N0 > In_N1                                then Err := 4; end_if;
+if Err <> 0 then
+	ER := 1;
+	tnd();
+end_if;
+
+// Find mean
+_sum := 0.0;
+for _i := In_N0 to In_N1 do
+	_sum := _sum + In_Array[ _i, In_MainIndex ];
+end_for;
+Out_Mean := _sum / ( In_N1 - In_N0 + 1 );
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Mean2D - Prescan
+
+size( In_Array, 0, _maxDim0 ); // Dimension 0 is the most right index
+size( In_Array, 1, _maxDim1 );
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Mean50 - Logic
+
+ER  := 0;
+Err := 0;
+
+// Some checks
+if In_N0 < 0        or _maxDim0 <= In_N0        then Err := 2; end_if;
+if In_N1 < 0        or _maxDim0 <= In_N1        then Err := 3; end_if;
+if In_N0 > In_N1                                then Err := 4; end_if;
+if Err <> 0 then
+	ER := 1;
+	tnd();
+end_if;
+
+// Find mean
+_sum := 0.0;
+for _i := In_N0 to In_N1 do
+	_sum := _sum + In_Array[ _i];
+end_for;
+Out_Mean := _sum / ( In_N1 - In_N0 + 1 );
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Mean50 - Prescan
+
+size( In_Array, 0, _maxDim0 ); // Dimension 0 is the most right index
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Round - Prescan
+
+_n := In_X;
+Out_Ret := _n;
+
+//New file////////////////////////////////////////////////////////////////////
+//Assets\Add-On Instructions________________________________________________________________________________________________________________________________________________________________________________________
+//Name: AOI_Trunc - Logic
+
+// TODO: Logix has a truc function but other PLCs may not.
+//       Replace the native function in Logix with an
+//       implementation which will work with other PLC.
+//       Note that AOI_Trunc and AOI_Ceil (which depends
+//       on AOI_Trunc ) may not be needed in the project.
+
+Out_Ret := trunc( In_X );
+
+
+
+
